@@ -1,0 +1,261 @@
+import numpy as np
+import cv2
+     
+
+!git clone https://github.com/YoongiKim/CIFAR-10-images.git
+import os
+os.chdir('CIFAR-10-images/test')
+     
+Cloning into 'CIFAR-10-images'...
+remote: Enumerating objects: 60027, done.
+remote: Total 60027 (delta 0), reused 0 (delta 0), pack-reused 60027
+Receiving objects: 100% (60027/60027), 19.94 MiB | 44.29 MiB/s, done.
+Resolving deltas: 100% (59990/59990), done.
+Updating files: 100% (60001/60001), done.
+
+img_data = []
+class_names = os.listdir()
+     
+
+for class_name in class_names:
+  class_dir = os.path.join(os.getcwd(), class_name)
+  images = os.listdir(class_dir)
+  classIndex = class_names.index(class_name)
+
+  for img in images:
+    img_data.append([classIndex, cv2.imread(os.path.join(class_dir, img), cv2.IMREAD_GRAYSCALE)])
+
+     
+
+import matplotlib.pyplot as plt
+plt.imshow(img_data[100][1], cmap="gray")
+     
+<matplotlib.image.AxesImage at 0x7b8a77ddee30>
+
+
+import random
+random.shuffle(img_data)
+     
+
+plt.imshow(img_data[100][1], cmap="gray")
+     
+<matplotlib.image.AxesImage at 0x7b8a7591c3d0>
+
+
+def manhattan(a,b):
+  return np.sum(np.abs(a-b))
+
+def euclidian(a,b):
+  return np.sqrt(np.sum((a-b)**2))
+     
+
+from collections import Counter
+from tqdm import tqdm
+     
+
+k=25
+man_per = []
+ecd_per = []
+
+x=0
+y=2000
+while(y<10001):
+  fold_array=img_data[x:y]
+  train_array=img_data[:x]+img_data[y:]
+  fold_total_img = 2000
+  fold_correct_img_man = [0]*k
+  fold_correct_img_ecd = [0]*k
+  for fold_unit in tqdm(fold_array, desc="Processing"):
+    fold_class, fold_img = fold_unit
+    fold_man_unit_list=[]
+    fold_ecd_unit_list=[]
+    for train_unit in train_array:
+      train_class, train_img = train_unit
+      fold_man_unit_list.append([train_class, manhattan(fold_img, train_img)])
+      fold_ecd_unit_list.append([train_class, euclidian(fold_img, train_img)])
+    fold_man_unit_list.sort(key=lambda r: r[1])
+    fold_ecd_unit_list.sort(key=lambda r: r[1])
+    fold_man = [i[0] for i in fold_man_unit_list[:k]]
+    fold_ecd = [i[0] for i in fold_ecd_unit_list[:k]]
+    high_man=[]
+    high_ecd=[]
+    while fold_man:
+      counter = Counter(fold_man)
+      most_common_number, most_common_count = counter.most_common(1)[0]
+      high_man.insert(0, most_common_number)
+      fold_man.pop()
+    while fold_ecd:
+      counter = Counter(fold_ecd)
+      most_common_number, most_common_count = counter.most_common(1)[0]
+      high_ecd.insert(0, most_common_number)
+      fold_ecd.pop()
+    for i in range(25):
+      if(high_man[i]==fold_class):
+        fold_correct_img_man[i]+=1
+      if(high_ecd[i]==fold_class):
+        fold_correct_img_ecd[i]+=1
+  fold_correct_img_man = [(j/fold_total_img)*100 for j in fold_correct_img_man]
+  fold_correct_img_ecd = [(j/fold_total_img)*100 for j in fold_correct_img_ecd]
+  man_per.append(fold_correct_img_man)
+  ecd_per.append(fold_correct_img_ecd)
+  x+=2000
+  y+=2000
+     
+Processing: 100%|██████████| 2000/2000 [07:25<00:00,  4.49it/s]
+Processing: 100%|██████████| 2000/2000 [07:21<00:00,  4.53it/s]
+Processing: 100%|██████████| 2000/2000 [07:20<00:00,  4.54it/s]
+Processing: 100%|██████████| 2000/2000 [07:28<00:00,  4.46it/s]
+Processing: 100%|██████████| 2000/2000 [07:17<00:00,  4.57it/s]
+
+man_fold_acc = []
+ecd_fold_acc = []
+for index in range(25):
+    extracted_elements_man = [sublist[index] for sublist in man_per]
+    extracted_elements_ecd = [sublist[index] for sublist in ecd_per]
+    man_fold_acc.append(extracted_elements_man)
+    ecd_fold_acc.append(extracted_elements_ecd)
+     
+
+mean_man = [np.mean(i) for i in man_fold_acc]
+mean_ecd = [np.mean(i) for i in ecd_fold_acc]
+     
+
+std_man = [np.std(i) for i in man_fold_acc]
+std_ecd = [np.std(i) for i in ecd_fold_acc]
+     
+
+k=25
+plt.figure(figsize=(12, 6))
+plt.errorbar(range(1, k+1), mean_man, yerr=std_ecd, label="Manhattan(L1) Distance")
+plt.errorbar(range(1, k+1), mean_ecd, yerr=std_ecd, label="Euclidian(L2) Distance")
+plt.scatter(range(1, k+1), mean_man, color="red", marker="o")
+plt.scatter(range(1, k+1), mean_ecd, color="blue", marker="o")
+plt.xlabel("k-value", size=18)
+plt.ylabel("Accuracy", size=18)
+plt.title("K-NN Plot for Manhattan(L1) and Euclidian(L2) Distance\n k-value vs. Accuracy", size=25, color="seagreen")
+plt.xlim(1, 25.5)
+plt.ylim(12, 26)
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=2)
+max_acc_man = np.argmax(mean_man)
+max_acc_ecd = np.argmax(mean_ecd)
+plt.axhline(y=mean_man[max_acc_man], linestyle='dotted', color='purple', label=f'Max Manhattan(L1) Accuracy = {round(mean_man[max_acc_man],2)}% for k-value = {max_acc_man+1}')
+plt.axhline(y=mean_ecd[max_acc_ecd], linestyle='dotted', color='brown', label=f'Max Manhattan(L2) Accuracy = {round(mean_ecd[max_acc_ecd],2)}% for k value = {max_acc_ecd+1}')
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=2)
+
+plt.show()
+     
+
+
+fig, (p1, p2) = plt.subplots(1, 2, figsize=(20, 6))
+p1.errorbar(range(1, k+1), mean_man, yerr=std_man, label="Manhattan(L1) Distance", color="teal")
+p1.scatter(range(1, k+1), mean_man, color="red", marker="o")
+p1.set_xlabel("k-value", size=20, color="teal")
+p1.set_ylabel("Accuracy", size=20, color="teal")
+p1.set_title("K-NN k-value vs. Accuracy [Manhattan(L1) Distance]", size=20, color="teal")
+p1.axhline(y=mean_man[max_acc_man], linestyle='dotted', color='purple', label=f'Max Manhattan(L1) Accuracy = {round(mean_man[max_acc_man],2)}% for k-value = {max_acc_man+1}')
+p1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=2)
+p2.errorbar(range(1, k+1), mean_ecd, yerr=std_ecd, label="Euclidian(L2) Distance", color="indigo")
+p2.scatter(range(1, k+1), mean_ecd, color="red", marker="o")
+p2.set_xlabel("k-value", size=20, color="indigo")
+p2.set_ylabel("Accuracy", size=20, color="indigo")
+p2.set_title("K-NN k-value vs. Accuracy [Euclidian(L2) Distance]", size=20, color="indigo")
+p2.axhline(y=mean_ecd[max_acc_ecd], linestyle='dotted', color='brown', label=f'Max Manhattan(L2) Accuracy = {round(mean_ecd[max_acc_ecd],2)}% for k value = {max_acc_ecd+1}')
+p2.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=2)
+
+plt.show()
+     
+
+
+!git clone https://github.com/YoongiKim/CIFAR-10-images.git
+import os
+os.chdir('CIFAR-10-images/test')
+     
+Cloning into 'CIFAR-10-images'...
+remote: Enumerating objects: 60027, done.
+remote: Total 60027 (delta 0), reused 0 (delta 0), pack-reused 60027
+Receiving objects: 100% (60027/60027), 19.94 MiB | 37.13 MiB/s, done.
+Resolving deltas: 100% (59990/59990), done.
+Updating files: 100% (60001/60001), done.
+
+img_data = []
+class_names = os.listdir()
+     
+
+import cv2
+import numpy as np
+
+for class_name in class_names:
+  class_dir = os.path.join(os.getcwd(), class_name)
+  images = os.listdir(class_dir)
+  classIndex = class_names.index(class_name)
+
+  for img in images:
+    img_data.append([classIndex, cv2.imread(os.path.join(class_dir, img), cv2.IMREAD_GRAYSCALE)])
+     
+
+import random
+random.shuffle(img_data)
+     
+
+k_man = 24
+k_ecd = 1
+best_man = []
+best_ecd = []
+for item in tqdm(img_data, desc='Processing'):
+  img_class, img = item
+  item_man = []
+  item_ecd = []
+  for t in img_data:
+    t_class, t_img = t
+    item_man.append([t_class, manhattan(img, t_img)])
+    item_ecd.append([t_class, euclidian(img, t_img)])
+  item_man.sort(key=lambda r: r[1])
+  item_ecd.sort(key=lambda r: r[1])
+  item_man_k = [i[0] for i in item_man if i[1]!=0]
+  item_ecd_k = [i[0] for i in item_ecd if i[1]!=0]  #to exclude the exact image present in dataset
+  item_man_k1 = [i for i in item_man_k[:k_man]]
+  item_ecd_k1 = [i for i in item_man_k[:k_ecd]]
+  element_count = Counter(item_man_k1)
+  most_common_element, highest_occurrence = element_count.most_common(1)[0]
+  if(most_common_element==img_class):
+    best_man.append([(highest_occurrence/k_man)*100, img, img_class])
+  element_count = Counter(item_ecd_k1)
+  most_common_element, highest_occurrence = element_count.most_common(1)[0]
+  if(most_common_element==img_class):
+    best_ecd.append([(highest_occurrence/k_ecd)*100, img, img_class])
+     
+Processing: 100%|██████████| 10000/10000 [45:50<00:00,  3.64it/s]
+
+best_man.sort(key=lambda r: r[0], reverse=True)
+best_ecd.sort(key=lambda r: r[0], reverse=True)
+     
+
+top5_man_per = best_man[:5]
+top5_ecd_per = best_ecd[:5]
+     
+
+images = [i[1] for i in top5_man_per]
+labels = [i[2] for i in top5_man_per]
+fig, axes = plt.subplots(1, 5, figsize=(15, 5))
+for i in range(5):
+    axes[i].imshow(images[i], cmap='gray')
+    axes[i].axis('off')
+    axes[i].text(0.5, -0.15, class_names[labels[i]]+f"\nConfidence: {round(top5_man_per[i][0],2)}%", fontsize=12, ha='center', transform=axes[i].transAxes)
+
+plt.tight_layout()
+plt.show()
+
+     
+
+
+images = [i[1] for i in top5_ecd_per]
+labels = [i[2] for i in top5_ecd_per]
+fig, axes = plt.subplots(1, 5, figsize=(15, 5))
+for i in range(5):
+    axes[i].imshow(images[i], cmap='gray')
+    axes[i].axis('off')
+    axes[i].text(0.5, -0.15, class_names[labels[i]]+f"\nConfidence: {round(top5_ecd_per[i][0],2)}%", fontsize=12, ha='center', transform=axes[i].transAxes)
+
+plt.tight_layout()
+plt.show()
+     
